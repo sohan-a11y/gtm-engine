@@ -103,7 +103,7 @@ class UserService(BaseService):
         # without needing a user row in the in-memory state.
         return UserResponse(
             id=payload.sub,
-            email=f"{payload.sub}@jwt.local",
+            email=f"svc-{payload.sub[:8]}@example.com",
             org_id=payload.org_id,
             role=payload.role,
             permissions=payload.permissions,

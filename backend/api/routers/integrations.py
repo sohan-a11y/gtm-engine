@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from typing import Any
+
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from backend.api.dependencies import get_org_id
 from backend.api.schemas.common import PaginationParams
@@ -25,6 +27,18 @@ async def list_integrations(org_id: str = Depends(get_org_id), pagination: Pagin
 
 @router.post("", response_model=IntegrationResponse)
 async def connect_integration(request: IntegrationConnectRequest, org_id: str = Depends(get_org_id)) -> IntegrationResponse:
+    return await integration_service.connect(org_id, request)
+
+
+@router.post("/{provider}/connect", response_model=IntegrationResponse)
+async def connect_provider(
+    provider: str,
+    body: dict[str, Any] = Body(default_factory=dict),
+    org_id: str = Depends(get_org_id),
+) -> IntegrationResponse:
+    if not body:
+        raise HTTPException(status_code=422, detail="credentials required")
+    request = IntegrationConnectRequest(provider=provider, credentials=body)
     return await integration_service.connect(org_id, request)
 
 

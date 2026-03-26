@@ -36,6 +36,16 @@ async def run_sync(org_id: str = Depends(get_org_id)) -> dict[str, object]:
     return _create_job(org_id, "sync_crm", {})
 
 
+@router.post("/run-batch-score")
+async def run_batch_score(org_id: str = Depends(get_org_id)) -> dict[str, object]:
+    return _create_job(org_id, "batch_score", {})
+
+
+@router.post("/run-crm-sync")
+async def run_crm_sync_job(org_id: str = Depends(get_org_id)) -> dict[str, object]:
+    return _create_job(org_id, "sync_crm", {})
+
+
 @router.get("/{job_id}/status")
 async def get_job_status(job_id: str, org_id: str = Depends(get_org_id)) -> dict[str, object]:
     job = STATE.jobs.get(job_id)
