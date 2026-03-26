@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: gtm_engine_test
+          POSTGRES_USER: gtm
+          POSTGRES_PASSWORD: gtm_password
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd="pg_isready -U gtm -d gtm_engine_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        shell: bash
+        run: |
+          if [ -f backend/requirements.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r backend/requirements.txt
+          elif [ -f backend/pyproject.toml ]; then
+            python -m pip install --upgrade pip
+            pip install -e backend
+          else
+            echo "Backend dependencies are not present yet."
+          fi
+
+      - name: Ruff
+        shell: bash
+        run: |
+          if [ -d backend ]; then
+            ruff check backend
+          fi
+
+      - name: Pytest with coverage
+        shell: bash
+        env:
+          DATABASE_URL: postgresql+asyncpg://gtm:gtm_password@localhost:5433/gtm_engine_test
+          DATABASE_SYNC_URL: postgresql://gtm:gtm_password@localhost:5433/gtm_engine_test
+          REDIS_URL: redis://localhost:6379/0
+          QDRANT_URL: http://localhost:6333
+          JWT_SECRET: ci-test-secret-ci-test-secret-ci-test-secret
+          ENCRYPTION_KEY: ci-test-encryption-key-ci-test-encryption-key
+        run: |
+          if [ -d backend/tests ]; then
+            pytest backend/tests --cov=backend --cov-report=xml
+          fi
+
+      - name: Upload coverage
+        if: ${{ hashFiles('coverage.xml') != '' }}
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        shell: bash
+        run: |
+          if [ -f frontend/package-lock.json ]; then
+            cd frontend && npm ci
+          elif [ -f frontend/package.json ]; then
+            cd frontend && npm install
+          else
+            echo "Frontend package manifest is not present yet."
+          fi
+
+      - name: ESLint
+        shell: bash
+        run: |
+          if [ -f frontend/package.json ]; then
+            cd frontend && npm run lint
+          fi
+
+      - name: Jest
+        shell: bash
+        run: |
+          if [ -f frontend/package.json ]; then
+            cd frontend && npm test -- --runInBand
+          fi
+
+      - name: Next build
+        shell: bash
+        run: |
+          if [ -f frontend/package.json ]; then
+            cd frontend && npm run build
+          fi
+
+  publish:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    needs:
+      - backend
+      - frontend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build backend image
+        shell: bash
+        run: |
+          if [ -f backend/Dockerfile ]; then
+            docker build -t ghcr.io/${{ github.repository_owner }}/gtm-engine-backend:latest ./backend
+          else
+            echo "backend/Dockerfile not present yet."
+          fi
+
+      - name: Build frontend image
+        shell: bash
+        run: |
+          if [ -f frontend/Dockerfile ]; then
+            docker build -t ghcr.io/${{ github.repository_owner }}/gtm-engine-frontend:latest ./frontend
+          else
+            echo "frontend/Dockerfile not present yet."
+          fi
+

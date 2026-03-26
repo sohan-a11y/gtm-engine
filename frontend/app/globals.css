@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 35 38% 97%;
+  --foreground: 222 47% 12%;
+  --card: 0 0% 100%;
+  --muted: 214 29% 94%;
+  --border: 214 23% 88%;
+  --input: 214 23% 88%;
+  --ring: 174 70% 34%;
+  --primary: 174 70% 32%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 28 87% 58%;
+  --accent-foreground: 25 50% 10%;
+  --success: 153 55% 36%;
+  --success-foreground: 0 0% 100%;
+  --warning: 39 94% 55%;
+  --warning-foreground: 24 92% 18%;
+  --danger: 0 72% 51%;
+  --danger-foreground: 0 0% 100%;
+}
+
+.dark {
+  --background: 222 47% 7%;
+  --foreground: 210 40% 98%;
+  --card: 222 45% 10%;
+  --muted: 217 33% 16%;
+  --border: 217 33% 18%;
+  --input: 217 33% 18%;
+  --ring: 174 63% 45%;
+  --primary: 174 63% 45%;
+  --primary-foreground: 222 47% 7%;
+  --accent: 28 88% 60%;
+  --accent-foreground: 222 47% 7%;
+  --success: 153 55% 44%;
+  --success-foreground: 222 47% 7%;
+  --warning: 39 94% 63%;
+  --warning-foreground: 222 47% 7%;
+  --danger: 0 72% 61%;
+  --danger-foreground: 222 47% 7%;
+}
+
+html {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(20, 184, 166, 0.08), transparent 28%),
+    radial-gradient(circle at 95% 5%, rgba(251, 146, 60, 0.12), transparent 20%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.3)),
+    hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+::selection {
+  background: hsla(var(--primary), 0.18);
+}
+
+.font-display {
+  font-family: var(--font-display), system-ui, sans-serif;
+}
+
+.soft-grid {
+  background-image: linear-gradient(to right, rgba(148, 163, 184, 0.15) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.15) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px);
+}
+
+.panel-ring {
+  box-shadow:
+    0 0 0 1px rgba(148, 163, 184, 0.24),
+    0 20px 70px rgba(15, 23, 42, 0.12);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
