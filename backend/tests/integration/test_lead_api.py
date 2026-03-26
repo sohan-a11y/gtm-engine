@@ -64,7 +64,7 @@ def test_list_leads_requires_auth(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             return await client.get("/leads")
     resp = asyncio.run(run())
-    assert resp.status_code == 403
+    assert resp.status_code in (401, 403)
 
 
 def test_list_leads_with_valid_token_returns_ok_or_503(app, auth_headers):

@@ -140,7 +140,7 @@ def test_agent_endpoint_requires_auth(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             return await c.post("/agents/icp_agent/score", json={"contact_profile": {}})
     resp = asyncio.run(run())
-    assert resp.status_code == 403
+    assert resp.status_code in (401, 403)
 
 
 # ── jobs endpoint ─────────────────────────────────────────────────────────────

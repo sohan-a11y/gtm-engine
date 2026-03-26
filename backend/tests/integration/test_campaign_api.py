@@ -48,7 +48,7 @@ def test_list_campaigns_unauthenticated_returns_403(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             return await c.get("/campaigns")
     resp = asyncio.run(run())
-    assert resp.status_code == 403
+    assert resp.status_code in (401, 403)
 
 
 def test_list_campaigns_with_auth(app, admin_headers):

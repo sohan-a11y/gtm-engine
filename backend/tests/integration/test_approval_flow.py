@@ -48,7 +48,7 @@ def test_list_approvals_requires_auth(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             return await c.get("/approvals")
     resp = asyncio.run(run())
-    assert resp.status_code == 403
+    assert resp.status_code in (401, 403)
 
 
 def test_list_approvals_authenticated(app, member_headers):

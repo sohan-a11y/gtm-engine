@@ -101,12 +101,18 @@ class OutboundAgent(BaseAgent):
             ]
         }
 
+    _CTA = "Would you be open to a quick chat?"
+    _CTA_WORDS = 8  # len(_CTA.split())
+    _MAX_WORDS = 150
+
     def _normalize_variation(self, item: Any) -> OutboundVariation:
         body = str(item.get("body", "")).strip()
-        if len(body.split()) > 150:
-            body = " ".join(body.split()[:150])
-        if "?" not in body:
-            body = f"{body} Would you be open to a quick chat?"
+        needs_cta = "?" not in body
+        word_limit = self._MAX_WORDS - (self._CTA_WORDS if needs_cta else 0)
+        if len(body.split()) > word_limit:
+            body = " ".join(body.split()[:word_limit])
+        if needs_cta:
+            body = f"{body} {self._CTA}"
         return OutboundVariation(
             subject=str(item.get("subject", "")).strip(),
             body=body,
