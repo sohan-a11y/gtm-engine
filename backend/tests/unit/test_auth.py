@@ -1,8 +1,6 @@
 """Unit tests for backend/core/auth.py"""
 from __future__ import annotations
 
-import time
-
 import pytest
 
 from backend.core.auth import (

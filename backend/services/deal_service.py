@@ -40,7 +40,7 @@ class DealService(BaseService):
         return DealResponse.model_validate(deal)
 
     async def analyze_risk(self, org_id: str, deal_id: str) -> DealResponse:
-        deal = await self.get_deal(org_id, deal_id)
+        await self.get_deal(org_id, deal_id)
         stored = self.state.deals[deal_id]
         amount = float(stored.get("amount") or 0)
         stage = stored.get("stage", "")

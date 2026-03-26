@@ -62,7 +62,8 @@ class ICPAgent(BaseAgent):
 
         context = self._build_scoring_context(contact_profile=contact_profile, training_profiles=training, similar_profiles=similar_profiles)
         system_prompt = load_prompt_template("icp_scoring", "You are an ICP scoring agent.")
-        fallback = lambda: self.fallback_result(contact_profile=contact_profile, training_profiles=training, reason="llm fallback")
+        def fallback() -> ICPScoreResult:
+            return self.fallback_result(contact_profile=contact_profile, training_profiles=training, reason="llm fallback")
         payload = await self.call_llm_json(system_prompt=system_prompt, user_prompt=context, fallback=fallback)
 
         score = payload.get("score")

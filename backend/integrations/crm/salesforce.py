@@ -14,8 +14,6 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-from urllib.parse import urljoin
-
 import httpx
 
 from backend.integrations.crm.base_crm import BaseCRM

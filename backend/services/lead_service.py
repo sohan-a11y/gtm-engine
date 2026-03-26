@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any
 
 from backend.api.schemas.leads import LeadCreate, LeadImportResult, LeadResponse, LeadUpdate
 from backend.core.context_builder import ContextBuilder, build_context_builder

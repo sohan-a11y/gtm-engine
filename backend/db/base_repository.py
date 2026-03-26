@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Generic, TypeVar
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 

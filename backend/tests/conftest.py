@@ -13,8 +13,8 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from backend.db.models import Base, Contact, Organization
-from backend.agents.base_agent import LocalLLMRouter
+from backend.db.models import Base, Contact, Organization  # noqa: E402
+from backend.agents.base_agent import LocalLLMRouter  # noqa: E402
 
 
 @pytest.fixture()

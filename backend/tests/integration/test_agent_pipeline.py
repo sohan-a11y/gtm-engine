@@ -17,8 +17,8 @@ try:
 except ImportError:  # pragma: no cover
     pytest.skip("httpx not installed", allow_module_level=True)
 
-from backend.api.main import create_app
-from backend.core.auth import create_token_pair
+from backend.api.main import create_app  # noqa: E402
+from backend.core.auth import create_token_pair  # noqa: E402
 
 
 @pytest.fixture()
