@@ -3,9 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from backend.core.audit_logger import build_audit_logger
 from backend.core.logging_config import get_logger
-from backend.services import campaign_service, deal_service, lead_service
+from backend.services import campaign_service, lead_service
 from backend.services.state import STATE, utc_now
 from backend.workers.celery_app import celery_app
 
