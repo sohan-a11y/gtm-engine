@@ -8,7 +8,8 @@ from typing import AsyncGenerator
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
-from backend.api.dependencies import get_current_user, CurrentUser
+from backend.api.dependencies import get_current_user
+from backend.api.schemas.auth import UserResponse
 
 router = APIRouter(tags=["events"])
 
@@ -87,7 +88,7 @@ async def _redis_event_stream(org_id: str, request: Request) -> AsyncGenerator[s
 @router.get("/events/agent-status")
 async def agent_status_events(
     request: Request,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ) -> StreamingResponse:
     """
     Server-Sent Events stream for real-time agent status updates.
