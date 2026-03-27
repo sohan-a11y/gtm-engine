@@ -1,22 +1,30 @@
 import { useMutation } from "@tanstack/react-query";
-
-import { apiFetch, ensureDemoSession, submitJson } from "@/lib/api";
-import { mockOrg, mockUser } from "@/lib/mock-data";
+import { apiFetch, submitJson } from "@/lib/api";
+import { backendUserToFrontend } from "@/lib/transforms";
 import { useAppStore } from "@/lib/store";
 import type { User } from "@/lib/types";
 
-const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
+type LoginRequest = { email: string; password: string };
+type RegisterRequest = { email: string; password: string; full_name?: string; org_name?: string };
 
-type LoginRequest = {
-  email: string;
-  password: string;
+type BackendAuthResponse = {
+  access_token?: string;
+  tokens?: { access_token: string };
+  user: {
+    id: string;
+    email: string;
+    full_name?: string | null;
+    org_id: string;
+    role: string;
+    permissions?: string[];
+  };
 };
 
-type LoginResponse = {
-  access_token: string;
-  user: User;
-  org_name?: string;
-};
+function extractSession(data: BackendAuthResponse) {
+  const token = data.access_token ?? data.tokens?.access_token ?? "";
+  const user = backendUserToFrontend(data.user);
+  return { accessToken: token, user };
+}
 
 export function useAuth() {
   const accessToken = useAppStore((state) => state.accessToken);
@@ -28,56 +36,33 @@ export function useAuth() {
 
   const loginMutation = useMutation({
     mutationFn: async (payload: LoginRequest) => {
-      try {
-        const result = await submitJson<LoginResponse>("/auth/login", payload);
-        if (result.ok && result.data) {
-          setSession({
-            accessToken: result.data.access_token,
-            user: result.data.user,
-            orgName: result.data.org_name ?? mockOrg.name
-          });
-          return result.data.user;
-        }
-
-        if (!DEMO_MODE) {
-          throw new Error("Login failed");
-        }
-
-        await ensureDemoSession();
-        setSession({
-          accessToken: "demo-access-token",
-          user: mockUser,
-          orgName: mockOrg.name
-        });
-        return mockUser;
-      } catch (error) {
-        if (!DEMO_MODE) {
-          throw error instanceof Error ? error : new Error("Login failed");
-        }
-
-        await ensureDemoSession();
-        setSession({
-          accessToken: "demo-access-token",
-          user: mockUser,
-          orgName: mockOrg.name
-        });
-        return mockUser;
+      const result = await submitJson<BackendAuthResponse>("/auth/login", payload);
+      if (!result.ok || !result.data) {
+        throw new Error("Login failed. Check your email and password.");
       }
-    }
+      const { accessToken: token, user } = extractSession(result.data);
+      setSession({ accessToken: token, user });
+      return user;
+    },
   });
 
-  const refreshMutation = useMutation({
-    mutationFn: async () => {
-      await ensureDemoSession();
-      return useAppStore.getState().sessionUser;
-    }
+  const registerMutation = useMutation({
+    mutationFn: async (payload: RegisterRequest) => {
+      const result = await submitJson<BackendAuthResponse>("/auth/register", payload);
+      if (!result.ok || !result.data) {
+        throw new Error("Registration failed.");
+      }
+      const { accessToken: token, user } = extractSession(result.data);
+      setSession({ accessToken: token, user });
+      return user;
+    },
   });
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
       await apiFetch("/auth/logout", { method: "POST" }).catch(() => null);
       clearSession();
-    }
+    },
   });
 
   return {
@@ -87,7 +72,9 @@ export function useAuth() {
     authStatus,
     isAuthenticated: Boolean(accessToken),
     login: loginMutation.mutateAsync,
-    refresh: refreshMutation.mutateAsync,
-    logout: logoutMutation.mutateAsync
+    loginError: loginMutation.error,
+    register: registerMutation.mutateAsync,
+    registerError: registerMutation.error,
+    logout: logoutMutation.mutateAsync,
   };
 }

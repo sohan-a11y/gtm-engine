@@ -14,8 +14,8 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, isAuthenticated } = useAuth();
   const [pending, startTransition] = useTransition();
-  const [email, setEmail] = useState("samir@artifex.ai");
-  const [password, setPassword] = useState("demo-password");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function LoginPage() {
           <div className="space-y-2">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Sign in</p>
             <h2 className="font-display text-3xl font-semibold">Welcome back</h2>
-            <p className="text-sm text-slate-600">Use your workspace credentials or the demo fallback.</p>
+            <p className="text-sm text-slate-600">Use your workspace credentials to sign in.</p>
           </div>
 
           <div className="space-y-4">
@@ -96,9 +96,9 @@ export default function LoginPage() {
           </Button>
 
           <p className="text-sm text-slate-500">
-            Demo credentials are prefilled. If you already have a session,{" "}
+            Already have a session?{" "}
             <Link href="/" className="font-semibold text-primary">
-              jump back into the workspace
+              Jump back into the workspace
             </Link>
             .
           </p>

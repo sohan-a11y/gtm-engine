@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-
 import { fetchJson } from "@/lib/api";
-import { mockApprovals } from "@/lib/mock-data";
+import { backendApprovalToFrontend, unwrapItems } from "@/lib/transforms";
 import type { ApprovalItem } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 
@@ -12,7 +11,10 @@ export function useApprovals() {
 
   const query = useQuery({
     queryKey: ["approvals"],
-    queryFn: () => fetchJson<ApprovalItem[]>("/approvals", mockApprovals)
+    queryFn: async () => {
+      const raw = await fetchJson<unknown>("/approvals?limit=200", []);
+      return unwrapItems(raw as any).map((item: any) => backendApprovalToFrontend(item));
+    },
   });
 
   const currentItem = useMemo(
@@ -20,9 +22,5 @@ export function useApprovals() {
     [query.data, selectedApprovalId]
   );
 
-  return {
-    ...query,
-    currentItem,
-    selectApproval
-  };
+  return { ...query, currentItem, selectApproval };
 }

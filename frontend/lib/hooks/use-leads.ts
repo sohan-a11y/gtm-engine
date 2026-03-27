@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-
 import { fetchJson } from "@/lib/api";
-import { mockLeads } from "@/lib/mock-data";
+import { backendLeadToFrontend, unwrapItems } from "@/lib/transforms";
 import type { Lead } from "@/lib/types";
 import { useAppStore } from "@/lib/store";
 
@@ -10,16 +9,14 @@ export function useLeads() {
 
   return useQuery({
     queryKey: ["leads", search],
-    queryFn: async () =>
-      fetchJson<Lead[]>("/leads", mockLeads).then((rows) =>
-        search.trim()
-          ? rows.filter((lead) =>
-              [lead.name, lead.company, lead.title, lead.email, lead.notes]
-                .join(" ")
-                .toLowerCase()
-                .includes(search.toLowerCase())
-            )
-          : rows
-      )
+    queryFn: async () => {
+      const raw = await fetchJson<{ items: Lead[] } | Lead[]>(
+        search.trim() ? `/leads?search=${encodeURIComponent(search)}&limit=200` : "/leads?limit=200",
+        []
+      );
+      return unwrapItems(raw as { items: unknown[]; total: number; page: number; page_size: number }).map(
+        (item) => backendLeadToFrontend(item as Parameters<typeof backendLeadToFrontend>[0])
+      );
+    },
   });
 }

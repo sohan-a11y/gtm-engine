@@ -1,9 +1,8 @@
-import { mockOrg, mockUser } from "@/lib/mock-data";
 import { useAppStore } from "@/lib/store";
 import type { User } from "@/lib/types";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api").replace(/\/$/, "");
-const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE !== "false";
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 
 type ApiResult<T> = {
   ok: boolean;
@@ -55,20 +54,11 @@ async function refreshAccessToken() {
     useAppStore.getState().setSession({
       accessToken: payload.access_token,
       user: payload.user,
-      orgName: payload.org_name ?? mockOrg.name
+      orgName: payload.org_name ?? ""
     });
 
     return payload.access_token;
   } catch {
-    if (DEMO_MODE) {
-      useAppStore.getState().setSession({
-        accessToken: "demo-access-token",
-        user: mockUser,
-        orgName: mockOrg.name
-      });
-      return "demo-access-token";
-    }
-
     useAppStore.getState().clearSession();
     return null;
   }
