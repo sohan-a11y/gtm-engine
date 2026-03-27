@@ -22,10 +22,13 @@ class SlackWebhookClient:
                 "status": "queued",
             }
         blocks = (metadata or {}).get("blocks") if metadata else None
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                self.webhook_url,
-                json={"text": text, "blocks": blocks} if blocks else {"text": text},
-            )
-            resp.raise_for_status()
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    self.webhook_url,
+                    json={"text": text, "blocks": blocks} if blocks else {"text": text},
+                )
+                resp.raise_for_status()
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.HTTPStatusError):
+            return {"status": "error", "provider": "slack"}
         return {"status": "sent", "provider": "slack"}

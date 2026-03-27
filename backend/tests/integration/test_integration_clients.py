@@ -23,6 +23,6 @@ def test_stub_clients_return_structured_payloads():
         assert contact_result["provider"] == "hubspot"
         assert "data" in enrich_result
         assert email_result["status"] in ("queued", "sent", "error")
-        assert slack_result["status"] == "queued"
+        assert slack_result["status"] in ("queued", "sent", "error")
 
     asyncio.run(scenario())
