@@ -5,11 +5,13 @@
 <p><strong>Replace your entire Go-To-Market SaaS stack with one self-hosted AI platform.</strong></p>
 
 <p>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://github.com/sohan-a11y/gtm-engine/stargazers"><img src="https://img.shields.io/github/stars/sohan-a11y/gtm-engine?style=flat" alt="GitHub Stars"></a>
   <a href="#quick-start"><img src="https://img.shields.io/badge/docker-compose%20up-blue?logo=docker" alt="Docker"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
-  <a href="https://github.com/kalyaankummer/gtm-engine/actions"><img src="https://img.shields.io/github/actions/workflow/status/kalyaankummer/gtm-engine/ci.yml?label=CI" alt="CI"></a>
-  <a href="#"><img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+"></a>
+  <a href="#"><img src="https://img.shields.io/badge/python-3.11%2B-blue?logo=python" alt="Python 3.11+"></a>
+  <a href="#"><img src="https://img.shields.io/badge/TypeScript-5-blue?logo=typescript" alt="TypeScript"></a>
   <a href="#"><img src="https://img.shields.io/badge/next.js-14-black?logo=next.js" alt="Next.js 14"></a>
+  <a href="https://github.com/sohan-a11y/gtm-engine/actions"><img src="https://img.shields.io/github/actions/workflow/status/sohan-a11y/gtm-engine/ci.yml?label=CI" alt="CI"></a>
 </p>
 
 <p>
@@ -92,17 +94,21 @@ ChurnZero      → Retention Agent (health scoring + churn prediction)
 
 ```bash
 # 1. Clone
-git clone https://github.com/kalyaankummer/gtm-engine.git
+git clone https://github.com/sohan-a11y/gtm-engine.git
 cd gtm-engine
 
-# 2. Configure
+# 2. Copy the environment template
 cp .env.example .env
-# Edit .env — set LLM_PROVIDER, LLM_API_KEY, JWT_SECRET, ENCRYPTION_KEY
 
-# 3. Launch (everything: API, frontend, DB, Redis, Qdrant, workers)
+# 3. Fill in required secrets
+#    JWT_SECRET  → openssl rand -hex 32
+#    ENCRYPTION_KEY → python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+#    OPENAI_API_KEY → or ANTHROPIC_API_KEY
+
+# 4. Start the full stack
 docker compose up --build
 
-# 4. Open the dashboard
+# 5. Open the dashboard
 open http://localhost:3000
 ```
 
@@ -112,6 +118,19 @@ open http://localhost:3000
 > ```bash
 > docker compose --profile observability up --build
 > ```
+
+See [docs/getting-started.md](docs/getting-started.md) for the first-run checklist and troubleshooting guide.
+
+---
+
+## 🚀 Deploy in One Click
+
+| Platform | Button |
+|----------|--------|
+| Railway | [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/gtm-engine) |
+| Render | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/sohan-a11y/gtm-engine) |
+
+Both platforms read the `railway.json` / `render.yaml` in the repo root. You'll need to set LLM API keys and other secrets in the platform's environment variable dashboard after deploy. See [docs/deployment.md](docs/deployment.md) for full instructions.
 
 ---
 
@@ -175,29 +194,21 @@ The Next.js dashboard includes:
 
 ## ⚙️ Configuration
 
-All configuration is via `.env`. See `.env.example` for every available option with documentation.
+All configuration is via `.env`. See `.env.example` for every available option with inline documentation, or read the full [configuration reference](docs/configuration.md).
 
 **Minimum required:**
 ```bash
-# Auth
-JWT_SECRET=<256-bit random string>
-ENCRYPTION_KEY=<Fernet key: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())">
-
-# At least one LLM provider
-LLM_PROVIDER=openai          # or anthropic, ollama
-LLM_API_KEY=sk-...
-LLM_MODEL=gpt-4o-mini
-
-# Database (auto-configured in Docker)
-DATABASE_URL=postgresql+asyncpg://gtm:gtm_password@postgres:5432/gtm_engine
+JWT_SECRET=<openssl rand -hex 32>
+ENCRYPTION_KEY=<python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())">
+OPENAI_API_KEY=sk-...    # or ANTHROPIC_API_KEY
 ```
 
-**Optional integrations** (all work without any of these — agents fall back gracefully):
+**Optional integrations** (agents fall back gracefully without these):
 ```bash
-HUBSPOT_ACCESS_TOKEN=...
+HUBSPOT_CLIENT_ID=...
 APOLLO_API_KEY=...
 HUNTER_API_KEY=...
-GMAIL_OAUTH_TOKEN=...
+GMAIL_CLIENT_ID=...
 SLACK_WEBHOOK_URL=...
 ```
 
@@ -272,6 +283,33 @@ gtm-engine/
 
 ---
 
+## 📸 Screenshots
+
+| Dashboard | Pipeline Kanban |
+|-----------|----------------|
+| ![Dashboard](docs/assets/dashboard.png) | ![Pipeline](docs/assets/pipeline-kanban.png) |
+
+| Approval Queue | Analytics |
+|---------------|-----------|
+| ![Approvals](docs/assets/approval-queue.png) | ![Analytics](docs/assets/analytics-outbound.png) |
+
+See [docs/screenshots.md](docs/screenshots.md) for the full gallery.
+
+---
+
+## 📚 Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Getting Started](docs/getting-started.md) | Prerequisites, 5-step setup, first-run checklist, troubleshooting |
+| [Configuration](docs/configuration.md) | Every environment variable documented with defaults |
+| [Agents](docs/agents.md) | How each of the 5 agents works, inputs, outputs, training |
+| [Integrations](docs/integrations.md) | HubSpot, Salesforce, Gmail, Outlook, Apollo, Hunter, Slack setup |
+| [Deployment](docs/deployment.md) | Docker Compose, Railway, Render, scaling, backups |
+| [API Reference](docs/api-reference.md) | Key REST endpoints grouped by domain |
+
+---
+
 ## 🔒 Security
 
 - JWT access tokens (15 min) + refresh tokens (7 days, httpOnly cookie)
@@ -287,13 +325,11 @@ gtm-engine/
 
 ## 🗺️ Roadmap
 
+- [ ] LinkedIn enrichment via Sales Navigator API
 - [ ] Pipedrive CRM integration
-- [ ] LinkedIn outreach via Sales Navigator API
-- [ ] Transcript ingestion from Zoom / Gong / Chorus
-- [ ] Multi-step email sequences (automated follow-ups, still human-approved)
-- [ ] A/B testing for email variations
-- [ ] One-click deploy to Railway / Render / Fly.io
-- [ ] Chrome extension for LinkedIn prospecting
+- [ ] Zoom / Gong transcript sync (automatic ingestion for Deal Intelligence Agent)
+- [ ] A/B testing for email variations with statistical significance tracking
+- [ ] Mobile app (React Native) for approval queue on the go
 
 ---
 

@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: gtm-engine-api
+    env: python
+    buildCommand: pip install -e ".[prod]"
+    startCommand: uvicorn backend.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gtm-engine-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: gtm-engine-redis
+          type: redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://gtm-engine-api.onrender.com
+      - key: LOG_LEVEL
+        value: INFO
+      - key: ENABLE_PROMETHEUS_METRICS
+        value: "false"
+
+  - type: redis
+    name: gtm-engine-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+
+databases:
+  - name: gtm-engine-db
+    plan: free

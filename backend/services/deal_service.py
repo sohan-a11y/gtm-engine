@@ -4,11 +4,13 @@ import logging
 from dataclasses import dataclass, field
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.agents.deal_intel_agent import DealIntelAgent
 from backend.api.schemas.deals import DealCreate, DealResponse, DealUpdate
 from backend.core.exceptions import NotFoundError, ServiceUnavailableError
+from backend.enrichment.transcript_parser import TranscriptInsight
 from backend.core.llm_router import LLMRouter, build_llm_router
 from backend.db.models import Deal
 from backend.db.repositories.deal_repo import DealRepository
@@ -128,6 +130,21 @@ class DealService(BaseService):
                 risk += 0.25
             deal.risk_score = min(1.0, round(risk, 3))
 
+        try:
+            await session.commit()
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        return _deal_to_response(deal)
+
+    async def attach_transcript(
+        self, deal_id: str, insight: TranscriptInsight, *, session: AsyncSession
+    ) -> DealResponse:
+        result = await session.execute(select(Deal).where(Deal.id == UUID(deal_id)))
+        deal = result.scalar_one_or_none()
+        if deal is None:
+            raise NotFoundError("Deal not found")
+        existing_notes: str = getattr(deal, "notes", "") or ""
+        deal.notes = (existing_notes + "\n\n" + insight.summary).strip()  # type: ignore[attr-defined]
         try:
             await session.commit()
         except Exception as exc:
