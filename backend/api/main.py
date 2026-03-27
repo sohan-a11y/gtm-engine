@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from starlette.status import HTTP_500_INTERNAL_SERVER_ERROR
 
-from backend.api.routers import agents, analytics, approvals, campaigns, companies, deals, events, health, integrations, jobs, leads, settings, webhooks, auth
+from backend.api.routers import agents, analytics, approvals, campaigns, companies, deals, events, health, integrations, jobs, leads, notifications, settings, webhooks, auth
 from backend.core.exceptions import (
     AuthenticationError,
     ConflictError,
@@ -155,6 +155,7 @@ def create_app() -> FastAPI:
     app.include_router(settings.router)
     app.include_router(webhooks.router)
     app.include_router(jobs.router)
+    app.include_router(notifications.router)
     app.include_router(events.router)
     app.include_router(health.router)
 

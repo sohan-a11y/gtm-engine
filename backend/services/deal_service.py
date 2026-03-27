@@ -1,16 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, field
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.agents.deal_intel_agent import DealIntelAgent
 from backend.api.schemas.deals import DealCreate, DealResponse, DealUpdate
 from backend.core.exceptions import NotFoundError, ServiceUnavailableError
+from backend.core.llm_router import LLMRouter, build_llm_router
 from backend.db.models import Deal
 from backend.db.repositories.deal_repo import DealRepository
 
 from .base import BaseService
+
+logger = logging.getLogger(__name__)
 
 
 def _deal_to_response(deal: Deal) -> DealResponse:
@@ -30,6 +35,8 @@ def _deal_to_response(deal: Deal) -> DealResponse:
 
 @dataclass(slots=True)
 class DealService(BaseService):
+    llm_router: LLMRouter = field(default_factory=build_llm_router)
+
     async def create_deal(self, org_id: str, data: DealCreate, *, session: AsyncSession) -> DealResponse:
         repo = DealRepository(session)
         payload = {
@@ -92,14 +99,35 @@ class DealService(BaseService):
             raise ServiceUnavailableError(str(exc)) from exc
         if deal is None:
             raise NotFoundError("Deal not found")
-        amount = (deal.amount_cents or 0) / 100
-        stage = deal.stage or ""
-        risk = 0.25
-        if amount > 100_000:
-            risk += 0.25
-        if stage in {"negotiation", "contracting", "closed_lost"}:
-            risk += 0.25
-        deal.risk_score = min(1.0, round(risk, 3))
+
+        try:
+            agent = DealIntelAgent(llm_router=self.llm_router)
+            context = {
+                "name": deal.name,
+                "stage": deal.stage,
+                "amount": deal.amount_cents / 100 if deal.amount_cents else 0,
+                "risk_score": deal.risk_score,
+            }
+            result = await agent.analyze(deal=context)
+            deal.risk_score = result.risk_score
+            deal.risk_level = result.risk_level
+            deal.risk_factors = result.risk_factors
+            deal.positive_signals = result.positive_signals
+            deal.recommended_actions = result.recommended_actions
+            deal.deal_summary = result.deal_summary
+            if result.likely_close_date is not None:
+                deal.likely_close_date = result.likely_close_date
+        except Exception:
+            logger.exception("DealIntelAgent failed for deal %s; falling back to heuristic", deal_id)
+            amount = (deal.amount_cents or 0) / 100
+            stage = deal.stage or ""
+            risk = 0.25
+            if amount > 100_000:
+                risk += 0.25
+            if stage in {"negotiation", "contracting", "closed_lost"}:
+                risk += 0.25
+            deal.risk_score = min(1.0, round(risk, 3))
+
         try:
             await session.commit()
         except Exception as exc:
