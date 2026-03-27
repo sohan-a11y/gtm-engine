@@ -172,7 +172,7 @@ export default function OnboardingPage() {
 
           {completed === steps.length && (
             <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-700 font-semibold text-center">
-              🎉 You're all set! Your GTM engine is live.
+              🎉 You&apos;re all set! Your GTM engine is live.
             </div>
           )}
         </CardContent>
