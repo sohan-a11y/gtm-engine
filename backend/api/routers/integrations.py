@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.dependencies import get_db_session, get_org_id
@@ -16,6 +19,10 @@ from backend.api.schemas.integrations import (
 from backend.services import integration_service
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
+
+_HUBSPOT_AUTH_URL = "https://app.hubspot.com/oauth/authorize"
+_HUBSPOT_TOKEN_URL = "https://api.hubapi.com/oauth/v1/token"
+_HUBSPOT_SCOPES = "crm.objects.contacts.read crm.objects.contacts.write crm.objects.companies.read crm.objects.deals.read"
 
 
 @router.get("", response_model=IntegrationListResponse)
@@ -68,3 +75,63 @@ async def disconnect_integration(
     session: AsyncSession = Depends(get_db_session),
 ) -> IntegrationResponse:
     return await integration_service.disconnect(org_id, integration_id, session=session)
+
+
+# ── HubSpot OAuth ─────────────────────────────────────────────────────────────
+
+@router.get("/hubspot/authorize")
+async def hubspot_authorize(org_id: str = Depends(get_org_id)) -> RedirectResponse:
+    """Redirect user to HubSpot OAuth consent screen."""
+    client_id = os.getenv("HUBSPOT_CLIENT_ID", "")
+    redirect_uri = os.getenv("HUBSPOT_REDIRECT_URI", "http://localhost:8000/integrations/hubspot/callback")
+    if not client_id:
+        raise HTTPException(status_code=503, detail="HUBSPOT_CLIENT_ID not configured")
+    url = (
+        f"{_HUBSPOT_AUTH_URL}"
+        f"?client_id={client_id}"
+        f"&scope={_HUBSPOT_SCOPES.replace(' ', '%20')}"
+        f"&redirect_uri={redirect_uri}"
+        f"&state={org_id}"
+    )
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/hubspot/callback")
+async def hubspot_callback(
+    code: str,
+    state: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> IntegrationResponse:
+    """Exchange OAuth code for tokens and store the integration."""
+    client_id = os.getenv("HUBSPOT_CLIENT_ID", "")
+    client_secret = os.getenv("HUBSPOT_CLIENT_SECRET", "")
+    redirect_uri = os.getenv("HUBSPOT_REDIRECT_URI", "http://localhost:8000/integrations/hubspot/callback")
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=503, detail="HubSpot OAuth credentials not configured")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                _HUBSPOT_TOKEN_URL,
+                data={
+                    "grant_type": "authorization_code",
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "redirect_uri": redirect_uri,
+                    "code": code,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            resp.raise_for_status()
+            tokens = resp.json()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"HubSpot token exchange failed: {exc}") from exc
+
+    request = IntegrationConnectRequest(
+        provider="hubspot",
+        credentials={
+            "access_token": tokens.get("access_token", ""),
+            "refresh_token": tokens.get("refresh_token", ""),
+            "expires_in": tokens.get("expires_in", 1800),
+        },
+    )
+    return await integration_service.connect(state, request, session=session)
