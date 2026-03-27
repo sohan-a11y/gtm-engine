@@ -111,3 +111,27 @@ class ApprovalService(BaseService):
         except Exception as exc:
             raise ServiceUnavailableError(str(exc)) from exc
         return _seq_to_approval(seq)
+
+    async def mark_replied(
+        self,
+        org_id: str,
+        approval_id: str,
+        *,
+        session: AsyncSession,
+    ) -> ApprovalItem:
+        repo = ApprovalRepository(session)
+        try:
+            seq = await repo.set_status(
+                org_id=UUID(org_id),
+                approval_id=UUID(approval_id),
+                status="replied",
+            )
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        if seq is None:
+            raise NotFoundError("Approval not found")
+        try:
+            await session.commit()
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        return _seq_to_approval(seq)

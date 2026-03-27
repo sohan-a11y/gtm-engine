@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.api.dependencies import get_current_user, get_db_session
+from backend.api.dependencies import get_current_user, get_db_session, get_org_id
 from backend.api.schemas.auth import AuthSessionResponse, LoginRequest, LogoutResponse, RefreshRequest, RegisterRequest, UserResponse
 from backend.services import user_service
 
@@ -42,3 +43,38 @@ async def refresh(request: RefreshRequest) -> AuthSessionResponse:
 async def logout(current_user: UserResponse = Depends(get_current_user)) -> LogoutResponse:
     await user_service.logout(current_user.id)
     return LogoutResponse()
+
+
+@router.get("/users", response_model=list[UserResponse])
+async def list_team(
+    org_id: str = Depends(get_org_id),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[UserResponse]:
+    return await user_service.list_users(org_id, session=session)
+
+
+class InviteRequest(BaseModel):
+    email: EmailStr
+    full_name: str | None = None
+    role: str = "member"
+
+
+@router.post("/invite", response_model=UserResponse)
+async def invite_user(
+    request: InviteRequest,
+    org_id: str = Depends(get_org_id),
+    session: AsyncSession = Depends(get_db_session),
+) -> UserResponse:
+    return await user_service.invite_user(
+        org_id, request.email, request.role, request.full_name, session=session
+    )
+
+
+@router.patch("/users/{user_id}/role", response_model=UserResponse)
+async def update_role(
+    user_id: str,
+    role: str,
+    org_id: str = Depends(get_org_id),
+    session: AsyncSession = Depends(get_db_session),
+) -> UserResponse:
+    return await user_service.update_user_role(org_id, user_id, role, session=session)

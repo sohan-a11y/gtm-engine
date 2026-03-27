@@ -44,3 +44,12 @@ async def reject(
     session: AsyncSession = Depends(get_db_session),
 ) -> ApprovalItem:
     return await approval_service.reject(org_id, approval_id, current_user.id, request, session=session)
+
+
+@router.post("/{approval_id}/reply", response_model=ApprovalItem)
+async def mark_replied(
+    approval_id: str,
+    org_id: str = Depends(get_org_id),
+    session: AsyncSession = Depends(get_db_session),
+) -> ApprovalItem:
+    return await approval_service.mark_replied(org_id, approval_id, session=session)

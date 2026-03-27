@@ -212,9 +212,74 @@ class UserService(BaseService):
             permissions=payload.permissions,
         )
 
-    async def list_users(self, org_id: str) -> list[UserResponse]:
+    async def list_users(self, org_id: str, *, session: AsyncSession | None = None) -> list[UserResponse]:
+        if session is not None:
+            user_repo = UserRepository(session)
+            try:
+                users = await user_repo.list(org_id=UUID(org_id))
+            except Exception as exc:
+                raise ServiceUnavailableError(str(exc)) from exc
+            return [_user_response(u) for u in users]
         return [
             UserResponse(**{k: user[k] for k in UserResponse.model_fields if k in user})
             for user in self.state.users.values()
             if user["org_id"] == org_id
         ]
+
+    async def invite_user(
+        self,
+        org_id: str,
+        email: str,
+        role: str,
+        full_name: str | None,
+        *,
+        session: AsyncSession,
+    ) -> UserResponse:
+        from secrets import token_urlsafe
+
+        user_repo = UserRepository(session)
+        try:
+            existing = await user_repo.get_by_email(org_id=UUID(org_id), email=email.lower())
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        if existing is not None:
+            raise ConflictError("User already exists")
+        try:
+            user = await user_repo.create(
+                org_id=UUID(org_id),
+                data={
+                    "email": email.lower(),
+                    "password_hash": hash_password(token_urlsafe(12)),
+                    "full_name": full_name or "",
+                    "role": role,
+                    "permissions": list_permissions(role),
+                    "is_active": True,
+                },
+            )
+            await session.commit()
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        return _user_response(user)
+
+    async def update_user_role(
+        self,
+        org_id: str,
+        user_id: str,
+        role: str,
+        *,
+        session: AsyncSession,
+    ) -> UserResponse:
+        user_repo = UserRepository(session)
+        try:
+            user = await user_repo.get(org_id=UUID(org_id), object_id=UUID(user_id))
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        if user is None:
+            raise NotFoundError("User not found")
+        user.role = role
+        user.permissions = list_permissions(role)
+        try:
+            await session.commit()
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        return _user_response(user)
