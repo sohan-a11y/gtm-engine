@@ -104,6 +104,17 @@ export type AgentRun = {
   createdAt: string;
 };
 
+export type Deal = {
+  id: string;
+  name: string;
+  stage: string;
+  amount: number;
+  riskScore: number | null;
+  orgId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AnalyticsSnapshot = {
   leadsScored: number;
   emailsGenerated: number;

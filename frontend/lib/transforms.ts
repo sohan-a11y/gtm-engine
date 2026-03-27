@@ -2,7 +2,7 @@
  * Transforms backend API responses (snake_case, paginated) to frontend types (camelCase).
  */
 
-import type { AgentRun, AgentSummary, AnalyticsSnapshot, ApprovalItem, ApprovalVariant, Campaign, Company, Lead, User } from "@/lib/types";
+import type { AgentRun, AgentSummary, AnalyticsSnapshot, ApprovalItem, ApprovalVariant, Campaign, Company, Deal, Lead, User } from "@/lib/types";
 
 // Backend paginated response wrapper
 export type Paginated<T> = { items: T[]; total: number; page: number; page_size: number };
@@ -191,6 +191,32 @@ export function backendUserToFrontend(u: BackendUser): User {
     role: (u.role as User["role"]) ?? "member",
     orgId: u.org_id,
     avatarUrl: `https://api.dicebear.com/8.x/initials/svg?seed=${encodeURIComponent(u.full_name ?? u.email)}`,
+  };
+}
+
+type BackendDeal = {
+  id: string;
+  org_id: string;
+  name: string;
+  stage?: string;
+  amount?: number | null;
+  amount_cents?: number | null;
+  risk_score?: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export function backendDealToFrontend(d: BackendDeal): Deal {
+  const amount = d.amount ?? (d.amount_cents != null ? d.amount_cents / 100 : 0);
+  return {
+    id: d.id,
+    name: d.name,
+    stage: d.stage ?? "prospecting",
+    amount,
+    riskScore: d.risk_score ?? null,
+    orgId: d.org_id,
+    createdAt: d.created_at,
+    updatedAt: d.updated_at,
   };
 }
 

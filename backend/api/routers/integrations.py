@@ -200,3 +200,164 @@ async def salesforce_callback(
         },
     )
     return await integration_service.connect(state, request, session=session)
+
+
+# ── Gmail OAuth ───────────────────────────────────────────────────────────────
+
+_GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+_GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+_GMAIL_SCOPES = "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email"
+
+
+@router.get("/gmail/authorize")
+async def gmail_authorize(org_id: str = Depends(get_org_id)) -> RedirectResponse:
+    """Redirect user to Google OAuth consent screen for Gmail access."""
+    client_id = os.getenv("GMAIL_CLIENT_ID", "")
+    redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "http://localhost:8000/integrations/gmail/callback")
+    if not client_id:
+        raise HTTPException(status_code=503, detail="GMAIL_CLIENT_ID not configured")
+    url = (
+        f"{_GOOGLE_AUTH_URL}"
+        f"?response_type=code"
+        f"&client_id={client_id}"
+        f"&redirect_uri={redirect_uri}"
+        f"&scope={_GMAIL_SCOPES.replace(' ', '%20')}"
+        f"&access_type=offline"
+        f"&prompt=consent"
+        f"&state={org_id}"
+    )
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/gmail/callback")
+async def gmail_callback(
+    code: str,
+    state: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> IntegrationResponse:
+    """Exchange OAuth code for Gmail tokens and store the integration."""
+    client_id = os.getenv("GMAIL_CLIENT_ID", "")
+    client_secret = os.getenv("GMAIL_CLIENT_SECRET", "")
+    redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "http://localhost:8000/integrations/gmail/callback")
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=503, detail="Gmail OAuth credentials not configured")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                _GOOGLE_TOKEN_URL,
+                data={
+                    "grant_type": "authorization_code",
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "redirect_uri": redirect_uri,
+                    "code": code,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            resp.raise_for_status()
+            tokens = resp.json()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Gmail token exchange failed: {exc}") from exc
+
+    from_address = ""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            ui_resp = await client.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {tokens.get('access_token', '')}"},
+            )
+            if ui_resp.is_success:
+                from_address = ui_resp.json().get("email", "")
+    except Exception:
+        pass
+
+    request = IntegrationConnectRequest(
+        provider="gmail",
+        credentials={
+            "access_token": tokens.get("access_token", ""),
+            "refresh_token": tokens.get("refresh_token", ""),
+            "expires_in": tokens.get("expires_in", 3600),
+            "from_address": from_address,
+        },
+    )
+    return await integration_service.connect(state, request, session=session)
+
+
+# ── Outlook OAuth ─────────────────────────────────────────────────────────────
+
+_MS_AUTH_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+_MS_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+_OUTLOOK_SCOPES = "Mail.Send User.Read offline_access"
+
+
+@router.get("/outlook/authorize")
+async def outlook_authorize(org_id: str = Depends(get_org_id)) -> RedirectResponse:
+    """Redirect user to Microsoft OAuth consent screen for Outlook access."""
+    client_id = os.getenv("OUTLOOK_CLIENT_ID", "")
+    redirect_uri = os.getenv("OUTLOOK_REDIRECT_URI", "http://localhost:8000/integrations/outlook/callback")
+    if not client_id:
+        raise HTTPException(status_code=503, detail="OUTLOOK_CLIENT_ID not configured")
+    url = (
+        f"{_MS_AUTH_URL}"
+        f"?response_type=code"
+        f"&client_id={client_id}"
+        f"&redirect_uri={redirect_uri}"
+        f"&scope={_OUTLOOK_SCOPES.replace(' ', '%20')}"
+        f"&response_mode=query"
+        f"&state={org_id}"
+    )
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/outlook/callback")
+async def outlook_callback(
+    code: str,
+    state: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> IntegrationResponse:
+    """Exchange OAuth code for Outlook tokens and store the integration."""
+    client_id = os.getenv("OUTLOOK_CLIENT_ID", "")
+    client_secret = os.getenv("OUTLOOK_CLIENT_SECRET", "")
+    redirect_uri = os.getenv("OUTLOOK_REDIRECT_URI", "http://localhost:8000/integrations/outlook/callback")
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=503, detail="Outlook OAuth credentials not configured")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                _MS_TOKEN_URL,
+                data={
+                    "grant_type": "authorization_code",
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "redirect_uri": redirect_uri,
+                    "code": code,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            resp.raise_for_status()
+            tokens = resp.json()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Outlook token exchange failed: {exc}") from exc
+
+    from_address = ""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            me_resp = await client.get(
+                "https://graph.microsoft.com/v1.0/me",
+                headers={"Authorization": f"Bearer {tokens.get('access_token', '')}"},
+            )
+            if me_resp.is_success:
+                from_address = me_resp.json().get("mail") or me_resp.json().get("userPrincipalName", "")
+    except Exception:
+        pass
+
+    request = IntegrationConnectRequest(
+        provider="outlook",
+        credentials={
+            "access_token": tokens.get("access_token", ""),
+            "refresh_token": tokens.get("refresh_token", ""),
+            "expires_in": tokens.get("expires_in", 3600),
+            "from_address": from_address,
+        },
+    )
+    return await integration_service.connect(state, request, session=session)
