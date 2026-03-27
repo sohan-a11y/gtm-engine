@@ -35,6 +35,16 @@ logger = get_logger("gtm.api")
 async def lifespan(app: FastAPI):
     configure_logging()
     app.state.started_at = time.time()
+    try:
+        from backend.db.session import build_async_engine
+        from backend.db.models import Base
+        engine = build_async_engine()
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        await engine.dispose()
+    except Exception as exc:
+        import logging
+        logging.getLogger("gtm.api").warning("DB init skipped: %s", exc)
     yield
 
 

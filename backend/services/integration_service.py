@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.schemas.integrations import (
     IntegrationConnectRequest,
@@ -8,59 +11,96 @@ from backend.api.schemas.integrations import (
     IntegrationSyncResult,
 )
 from backend.core.encryption import encrypt_payload
-from backend.core.exceptions import NotFoundError
+from backend.core.exceptions import NotFoundError, ServiceUnavailableError
+from backend.db.models import Integration
+from backend.db.models import utc_now
+from backend.db.repositories.integration_repo import IntegrationRepository
 
 from .base import BaseService
-from .state import generate_id, utc_now
+
+
+def _integration_to_response(item: Integration) -> IntegrationResponse:
+    return IntegrationResponse(
+        id=str(item.id),
+        org_id=str(item.org_id),
+        provider=item.provider,
+        status=item.status,
+        credentials={},
+        metadata=item.metadata_json or {},
+        last_synced_at=item.last_synced_at,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
 
 
 @dataclass(slots=True)
 class IntegrationService(BaseService):
-    async def connect(self, org_id: str, request: IntegrationConnectRequest) -> IntegrationResponse:
-        integration_id = generate_id("integration")
-        now = utc_now()
-        record = {
-            "id": integration_id,
-            "org_id": org_id,
+    async def connect(self, org_id: str, request: IntegrationConnectRequest, *, session: AsyncSession) -> IntegrationResponse:
+        repo = IntegrationRepository(session)
+        payload = {
             "provider": request.provider,
+            "integration_type": "generic",
             "status": "connected",
-            "credentials": {"encrypted": encrypt_payload(request.credentials)},
-            "metadata": request.metadata,
-            "last_synced_at": None,
-            "created_at": now,
-            "updated_at": now,
+            "credentials_encrypted": encrypt_payload(request.credentials),
+            "metadata_json": request.metadata,
         }
-        self.state.integrations[integration_id] = record
-        return IntegrationResponse.model_validate(record)
+        try:
+            # Upsert: if provider already exists for org, update it
+            existing = await repo.get_by_provider(org_id=UUID(org_id), provider=request.provider)
+            if existing is not None:
+                existing.credentials_encrypted = payload["credentials_encrypted"]
+                existing.metadata_json = payload["metadata_json"]
+                existing.status = "connected"
+                await session.commit()
+                return _integration_to_response(existing)
+            item = await repo.create(org_id=UUID(org_id), data=payload)
+            await session.commit()
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        return _integration_to_response(item)
 
-    async def list_integrations(self, org_id: str) -> list[IntegrationResponse]:
-        return [
-            IntegrationResponse.model_validate(item)
-            for item in self.state.integrations.values()
-            if item["org_id"] == org_id
-        ]
+    async def list_integrations(self, org_id: str, *, session: AsyncSession) -> list[IntegrationResponse]:
+        repo = IntegrationRepository(session)
+        try:
+            items = await repo.list(org_id=UUID(org_id))
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        return [_integration_to_response(i) for i in items]
 
-    async def disconnect(self, org_id: str, integration_id: str) -> IntegrationResponse:
-        item = self.state.integrations.get(integration_id)
-        if not item or item["org_id"] != org_id:
+    async def disconnect(self, org_id: str, integration_id: str, *, session: AsyncSession) -> IntegrationResponse:
+        repo = IntegrationRepository(session)
+        try:
+            item = await repo.get(org_id=UUID(org_id), object_id=UUID(integration_id))
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        if item is None:
             raise NotFoundError("Integration not found")
-        item["status"] = "disconnected"
-        item["updated_at"] = utc_now()
-        return IntegrationResponse.model_validate(item)
+        item.status = "disconnected"
+        try:
+            await session.commit()
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        return _integration_to_response(item)
 
-    async def sync(self, org_id: str, integration_id: str) -> IntegrationSyncResult:
-        item = self.state.integrations.get(integration_id)
-        if not item or item["org_id"] != org_id:
+    async def sync(self, org_id: str, integration_id: str, *, session: AsyncSession) -> IntegrationSyncResult:
+        repo = IntegrationRepository(session)
+        try:
+            item = await repo.get(org_id=UUID(org_id), object_id=UUID(integration_id))
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        if item is None:
             raise NotFoundError("Integration not found")
-        item["last_synced_at"] = utc_now()
-        item["updated_at"] = utc_now()
-        result = IntegrationSyncResult(
-            provider=item["provider"],
+        started_at = utc_now()
+        item.last_synced_at = started_at
+        try:
+            await session.commit()
+        except Exception as exc:
+            raise ServiceUnavailableError(str(exc)) from exc
+        return IntegrationSyncResult(
+            provider=item.provider,
             status="success",
             synced_records=0,
             errors=0,
-            started_at=item["last_synced_at"],
+            started_at=started_at,
             finished_at=utc_now(),
         )
-        return result
-

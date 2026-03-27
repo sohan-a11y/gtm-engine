@@ -1,21 +1,24 @@
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncGenerator
 from functools import lru_cache
 from typing import Callable
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.schemas.auth import UserResponse
 from backend.core.audit_logger import AuditLogger, build_audit_logger
 from backend.core.cache import CacheBackend, build_cache_backend
-from backend.core.exceptions import AuthenticationError, PermissionDeniedError, RateLimitError
+from backend.core.exceptions import AuthenticationError, PermissionDeniedError, RateLimitError, ServiceUnavailableError
 from backend.core.llm_router import LLMRouter, build_llm_router
 from backend.core.orchestrator import GTMOrchestrator, build_orchestrator
 from backend.core.permissions import has_permission
 from backend.core.prompt_manager import PromptManager, build_prompt_manager
 from backend.core.rate_limiter import RateLimiter, build_rate_limiter
+from backend.db.session import build_async_engine, build_session_factory
 from backend.services import user_service
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -128,4 +131,25 @@ async def enforce_rate_limit(
     result = await limiter.check(subject=subject, rule_name=rule_name, namespace=namespace)
     if not result.allowed:
         raise RateLimitError("Too many requests")
+
+
+_session_factory = None
+
+
+def _get_factory():
+    global _session_factory
+    if _session_factory is None:
+        _engine = build_async_engine()
+        _session_factory = build_session_factory(_engine)
+    return _session_factory
+
+
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency that yields a per-request DB session."""
+    try:
+        factory = _get_factory()
+        async with factory() as session:
+            yield session
+    except Exception as exc:
+        raise ServiceUnavailableError(f"Database unavailable: {exc}") from exc
 
