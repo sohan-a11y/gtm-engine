@@ -144,7 +144,7 @@ export default function OnboardingPage() {
                     <p className="text-xs text-slate-500 mt-0.5">{step.description}</p>
                   </div>
                 </div>
-                <Link href={step.href}>
+                <Link href={step.href as any}>
                   <Button
                     size="sm"
                     variant={step.done ? "outline" : "default"}
@@ -162,7 +162,7 @@ export default function OnboardingPage() {
                 <span className="font-semibold text-slate-800">Next up: </span>
                 {nextStep.label} — {nextStep.description}
               </p>
-              <Link href={nextStep.href}>
+              <Link href={nextStep.href as any}>
                 <Button size="sm" className="mt-3">
                   {nextStep.cta}
                 </Button>
