@@ -105,6 +105,8 @@ class IntegrationService(BaseService):
         try:
             if item.provider == "hubspot":
                 synced, errors = await self._sync_hubspot(org_id=UUID(org_id), item=item, session=session)
+            elif item.provider == "salesforce":
+                synced, errors = await self._sync_salesforce(org_id=UUID(org_id), item=item, session=session)
         except Exception as exc:
             logger.error("Sync error for %s/%s: %s", item.provider, integration_id, exc)
             errors += 1
@@ -230,6 +232,113 @@ class IntegrationService(BaseService):
                     errors += 1
         except Exception as exc:
             logger.error("HubSpot get_deals error: %s", exc)
+            errors += 1
+
+        return synced, errors
+
+    async def _sync_salesforce(self, *, org_id: UUID, item: Integration, session: AsyncSession) -> tuple[int, int]:
+        """Pull contacts, companies, and deals from Salesforce and upsert into DB."""
+        from backend.integrations.crm.salesforce import SalesforceCRM
+
+        if not item.credentials_encrypted:
+            logger.warning("Salesforce sync: no credentials for org %s", org_id)
+            return 0, 0
+
+        try:
+            creds: dict = decrypt_payload(item.credentials_encrypted)
+        except Exception as exc:
+            logger.error("Salesforce sync: failed to decrypt credentials: %s", exc)
+            return 0, 1
+
+        access_token = creds.get("access_token", "")
+        instance_url = creds.get("instance_url", "")
+        if not access_token or not instance_url:
+            return 0, 0
+
+        crm = SalesforceCRM(access_token=access_token, instance_url=instance_url)
+        contact_repo = ContactRepository(session)
+        company_repo = CompanyRepository(session)
+        deal_repo = DealRepository(session)
+        synced: int = 0
+        errors: int = 0
+
+        # ── contacts ──────────────────────────────────────────────────────────
+        try:
+            contacts = await crm.get_contacts(limit=100)
+            for c in contacts:
+                try:
+                    email = c.get("email")
+                    if not email:
+                        continue
+                    sf_existing = await contact_repo.get_by_email(org_id=org_id, email=email)
+                    if sf_existing is None:
+                        await contact_repo.create(org_id=org_id, data={
+                            "email": email,
+                            "first_name": c.get("first_name", ""),
+                            "last_name": c.get("last_name", ""),
+                            "title": c.get("title"),
+                            "external_crm_id": c.get("external_crm_id"),
+                        })
+                    else:
+                        sf_existing.first_name = c.get("first_name", sf_existing.first_name)
+                        sf_existing.last_name = c.get("last_name", sf_existing.last_name)
+                        sf_existing.external_crm_id = c.get("external_crm_id") or sf_existing.external_crm_id
+                    synced += 1
+                except Exception as exc:
+                    logger.debug("Salesforce contact upsert error: %s", exc)
+                    errors += 1
+        except Exception as exc:
+            logger.error("Salesforce get_contacts error: %s", exc)
+            errors += 1
+
+        # ── companies ─────────────────────────────────────────────────────────
+        try:
+            companies = await crm.get_companies(limit=100)
+            for co in companies:
+                try:
+                    name = co.get("name", "")
+                    if not name:
+                        continue
+                    domain = co.get("domain")
+                    sf_co_existing = await company_repo.get_by_domain(org_id=org_id, domain=domain) if domain else None
+                    if sf_co_existing is None:
+                        await company_repo.create(org_id=org_id, data={
+                            "name": name,
+                            "domain": domain,
+                            "industry": co.get("industry"),
+                            "employee_count": co.get("employee_count"),
+                            "external_crm_id": co.get("external_crm_id"),
+                        })
+                    else:
+                        sf_co_existing.name = name
+                    synced += 1
+                except Exception as exc:
+                    logger.debug("Salesforce company upsert error: %s", exc)
+                    errors += 1
+        except Exception as exc:
+            logger.error("Salesforce get_companies error: %s", exc)
+            errors += 1
+
+        # ── deals ─────────────────────────────────────────────────────────────
+        try:
+            deals = await crm.get_deals(limit=100)
+            for d in deals:
+                try:
+                    name = d.get("name", "")
+                    if not name:
+                        continue
+                    await deal_repo.create(org_id=org_id, data={
+                        "name": name,
+                        "stage": d.get("stage", "prospecting"),
+                        "amount_cents": d.get("amount_cents", 0),
+                        "external_crm_id": d.get("external_crm_id"),
+                    })
+                    synced += 1
+                except Exception as exc:
+                    logger.debug("Salesforce deal upsert error: %s", exc)
+                    errors += 1
+        except Exception as exc:
+            logger.error("Salesforce get_deals error: %s", exc)
             errors += 1
 
         return synced, errors

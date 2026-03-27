@@ -135,3 +135,68 @@ async def hubspot_callback(
         },
     )
     return await integration_service.connect(state, request, session=session)
+
+
+# ── Salesforce OAuth ──────────────────────────────────────────────────────────
+
+_SF_AUTH_URL = "https://login.salesforce.com/services/oauth2/authorize"
+_SF_TOKEN_URL = "https://login.salesforce.com/services/oauth2/token"
+_SF_SCOPES = "api refresh_token offline_access"
+
+@router.get("/salesforce/authorize")
+async def salesforce_authorize(org_id: str = Depends(get_org_id)) -> RedirectResponse:
+    """Redirect user to Salesforce OAuth consent screen."""
+    client_id = os.getenv("SALESFORCE_CLIENT_ID", "")
+    redirect_uri = os.getenv("SALESFORCE_REDIRECT_URI", "http://localhost:8000/integrations/salesforce/callback")
+    if not client_id:
+        raise HTTPException(status_code=503, detail="SALESFORCE_CLIENT_ID not configured")
+    url = (
+        f"{_SF_AUTH_URL}"
+        f"?response_type=code"
+        f"&client_id={client_id}"
+        f"&redirect_uri={redirect_uri}"
+        f"&scope={_SF_SCOPES.replace(' ', '%20')}"
+        f"&state={org_id}"
+    )
+    return RedirectResponse(url=url, status_code=302)
+
+
+@router.get("/salesforce/callback")
+async def salesforce_callback(
+    code: str,
+    state: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> IntegrationResponse:
+    """Exchange OAuth code for Salesforce tokens and store the integration."""
+    client_id = os.getenv("SALESFORCE_CLIENT_ID", "")
+    client_secret = os.getenv("SALESFORCE_CLIENT_SECRET", "")
+    redirect_uri = os.getenv("SALESFORCE_REDIRECT_URI", "http://localhost:8000/integrations/salesforce/callback")
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=503, detail="Salesforce OAuth credentials not configured")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                _SF_TOKEN_URL,
+                data={
+                    "grant_type": "authorization_code",
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "redirect_uri": redirect_uri,
+                    "code": code,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            resp.raise_for_status()
+            tokens = resp.json()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Salesforce token exchange failed: {exc}") from exc
+
+    request = IntegrationConnectRequest(
+        provider="salesforce",
+        credentials={
+            "access_token": tokens.get("access_token", ""),
+            "refresh_token": tokens.get("refresh_token", ""),
+            "instance_url": tokens.get("instance_url", ""),
+        },
+    )
+    return await integration_service.connect(state, request, session=session)

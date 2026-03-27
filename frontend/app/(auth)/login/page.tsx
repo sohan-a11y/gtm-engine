@@ -102,6 +102,13 @@ export default function LoginPage() {
             </Link>
             .
           </p>
+          <p className="text-sm text-slate-500">
+            Don&apos;t have an account?{" "}
+            <Link href="/register" className="font-semibold text-primary">
+              Create one
+            </Link>
+            .
+          </p>
         </CardContent>
       </Card>
     </div>

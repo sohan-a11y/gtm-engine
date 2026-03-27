@@ -73,6 +73,14 @@ def make_celery_app():
                 "task": "backend.workers.tasks.sync_crm",
                 "schedule": 60 * 60 * 24,
             },
+            "send-approved-sequences": {
+                "task": "backend.workers.tasks.send_approved_sequences",
+                "schedule": 60 * 15,  # every 15 minutes
+            },
+            "batch-score": {
+                "task": "backend.workers.tasks.batch_score",
+                "schedule": 60 * 60,  # every hour
+            },
         },
     )
     return app
